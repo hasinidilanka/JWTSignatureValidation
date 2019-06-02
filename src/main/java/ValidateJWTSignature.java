@@ -39,7 +39,11 @@ import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.RSAPublicKeySpec;
 import java.text.ParseException;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.logging.Logger;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -52,17 +56,39 @@ import javax.net.ssl.X509TrustManager;
  */
 public class ValidateJWTSignature {
 
+    private static final Logger logger = Logger.getLogger(ValidateJWTSignature.class.getName());
+    private static final String JWT_TOKEN = "-jwttoken";
+    private static final String JWKS_ENDPOINT = "-jwksEndponit";
+    private static final Properties properties = new Properties();
+
     public static void main(String[] args) throws Exception {
 
-        // sample JWT token <header>.<body>.<singnature>
-        String signedJWTAsString =
-                "eyJ4NXQiOiJOVEF4Wm1NeE5ETXlaRGczTVRVMVpHTTBNekV6T0RKaFpXSTRORE5sWkRVMU9HRmtOakZpTVEiLCJraWQiOiJOVEF4Wm1NeE5ETXlaRGczTVRVMVpHTTBNekV6T0RKaFpXSTRORE5sWkRVMU9HRmtOakZpTVFfUlMyNTYiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhZG1pbiIsImF1ZCI6IjFjdDZiOFJiTThkNE5ZYzRHUGdKSkhfb1ZiY2EiLCJuYmYiOjE1NTkyMTYyMDEsImF6cCI6IjFjdDZiOFJiTThkNE5ZYzRHUGdKSkhfb1ZiY2EiLCJpc3MiOiJodHRwczpcL1wvbG9jYWxob3N0Ojk0NDNcL29hdXRoMlwvdG9rZW4iLCJleHAiOjE1NTkyMTk4MDEsImlhdCI6MTU1OTIxNjIwMSwianRpIjoiNjQ3NDY3ODMtNjEyMC00OTc0LTg4NjYtOTliOGM1NmEzODFjIn0.d_vuvIP2WJEMzf5UsDcNCMbMmlPrl5g9mrIqym_1g2QuNlaAvcLU829vO3ENDloCORtaGXHqs7EtgIF4Z7GSlTICb28KVfIudetimn8zG44prnDy6TzSzKNBfj84tlKxbZRhloaNPFt9InO7LqyX3oK2GNrTifuhPLY5Kv1xI5F5sEN9vKpiatrzdszHXOcf13pTgjIZRC-tqLrQBe3aUkge8IMCiO27n0YRaApxYUaFSjRwA3B1-SVs5BeuNWnU-vAXZOe9kpJT-qaV5WzunqGjnZjBnGB6NoNQZOfsmaCWRPgBwI2qXM7xm5EtahHFrccK4vUDnDd1fHC8Ox6xsQ";
-        String jwksEndpoint = "https://localhost:9443/oauth2/jwks/";
+        if (args.length > 0) {
+            final List<String> argList = Arrays.asList(JWT_TOKEN, JWKS_ENDPOINT);
 
-        decodeJWTToken(signedJWTAsString);
+            int j = 0;
+            for (int i = 0; i < args.length; ) {
+                if (argList.contains(args[i]) && args.length > (i + 1)) {
+                    properties.setProperty(argList.get(j), args[i + 1]);
+                    i += 2;
+                    j += 1;
+                } else {
+                    i += 1;
+                }
+            }
+        }
+        if (properties.size() != 2){
+            logger.warning("Please provide the jwtToken and jwksEndpoint to proceed");
+        } else {
+            // sample JWT token <header>.<body>.<singnature>
+            String signedJWTAsString = properties.getProperty(JWT_TOKEN);
+            // JWKs Endpoint
+            String jwksEndpoint = properties.getProperty(JWKS_ENDPOINT);
 
-        validateSignature(signedJWTAsString, jwksEndpoint);
+            decodeJWTToken(signedJWTAsString);
 
+            validateSignature(signedJWTAsString, jwksEndpoint);
+        }
     }
 
     /**
@@ -75,7 +101,7 @@ public class ValidateJWTSignature {
     private static void validateSignature(String signedJWTAsString, String jwksEndpoint) throws ParseException,
             JOSEException, net.minidev.json.parser.ParseException {
 
-        // To disable SSL. Comment this if you want to enable SSL
+        // To disable SSL.
         disableSslVerification();
 
         String responseStr = sendRequest(jwksEndpoint);
@@ -104,9 +130,9 @@ public class ValidateJWTSignature {
         JWSVerifier verifier = new RSASSAVerifier(publicKey);
 
         if (signedJWT.verify(verifier)) {
-            System.out.println("Signature is Valid");
+            logger.info("Signature is Valid");
         } else {
-            System.out.println("Signature is NOT Valid");
+            logger.info("Signature is NOT Valid");
         }
     }
 
@@ -139,10 +165,11 @@ public class ValidateJWTSignature {
     private static void decodeJWTToken(String encodedJWTToken) throws ParseException {
 
         SignedJWT signedJWT = SignedJWT.parse(encodedJWTToken);
-        System.out.println("JWTToken Claims: ");
+        String output = "JWTToken Claims: \n";
         for(Map.Entry<String,Object> claim : signedJWT.getJWTClaimsSet().getClaims().entrySet()) {
-            System.out.println("    "+claim.getKey() +" : "+claim.getValue());
+            output += "    "+claim.getKey() +" : "+claim.getValue()+"\n";
         }
+        logger.info(output);
     }
 
     /**
@@ -151,7 +178,6 @@ public class ValidateJWTSignature {
      * @return jwksResponse
      */
     private static String sendRequest(String jwksEndpoint){
-
         String https_url = jwksEndpoint;
         URL url;
         try {
